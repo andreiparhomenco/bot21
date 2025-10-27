@@ -25,19 +25,45 @@ class Settings:
     @staticmethod
     def _setup_credentials_path():
         """Setup Google credentials, supporting Railway environment variable"""
-        if os.getenv("GOOGLE_CREDENTIALS"):
+        creds_env = os.getenv("GOOGLE_CREDENTIALS")
+        
+        if creds_env:
             try:
-                # Create credentials from environment variable
-                credentials_data = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+                # Clean up the JSON string - remove extra whitespace, newlines
+                creds_env = creds_env.strip()
+                
+                # Try to parse JSON
+                credentials_data = json.loads(creds_env)
+                
+                # Validate it's a dict with required fields
+                if not isinstance(credentials_data, dict):
+                    raise ValueError("GOOGLE_CREDENTIALS must be a JSON object")
+                
+                if "type" not in credentials_data or "client_email" not in credentials_data:
+                    raise ValueError("GOOGLE_CREDENTIALS missing required fields (type, client_email)")
+                
+                # Create credentials file
                 credentials_path = "/tmp/google_credentials.json"
                 Path(credentials_path).parent.mkdir(exist_ok=True)
                 with open(credentials_path, 'w') as f:
                     json.dump(credentials_data, f)
-                print(f"✓ Created credentials file from GOOGLE_CREDENTIALS env var: {credentials_path}")
+                
+                print(f"✓ Created credentials file from GOOGLE_CREDENTIALS env var")
+                print(f"  Path: {credentials_path}")
+                print(f"  Type: {credentials_data.get('type')}")
+                print(f"  Client: {credentials_data.get('client_email')}")
+                
                 return credentials_path
+                
             except json.JSONDecodeError as e:
-                print(f"✗ Error parsing GOOGLE_CREDENTIALS: {e}")
+                print(f"✗ Error parsing GOOGLE_CREDENTIALS JSON: {e}")
+                print(f"  First 100 chars: {creds_env[:100]}...")
+                print(f"  Hint: Make sure the variable contains valid JSON without extra characters")
                 # Fall back to default path
+                return os.getenv("CREDENTIALS_PATH", "credentials/google_credentials.json")
+                
+            except Exception as e:
+                print(f"✗ Error processing GOOGLE_CREDENTIALS: {e}")
                 return os.getenv("CREDENTIALS_PATH", "credentials/google_credentials.json")
         else:
             # Use file path from environment or default
