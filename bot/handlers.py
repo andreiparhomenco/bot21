@@ -4,7 +4,7 @@ Telegram bot handlers for commands, messages, and callbacks
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from database.sheets import db
+from database.sheets import get_db
 from scheduler.tasks import schedule_day2_reminder
 from bot.states import UserState, ProgressOption
 from bot.messages import (
@@ -57,7 +57,7 @@ async def assess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {user_id} requested assessment")
     
     # Check if user has a goal
-    user_data = db.get_user_data(user_id)
+    user_data = get_db().get_user_data(user_id)
     
     if not user_data or not user_data.get('goal_text'):
         await update.message.reply_text(ERROR_NO_GOAL)
@@ -97,7 +97,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
         
         # Save goal to database
-        success = db.save_user_goal(user_id, username, full_name, text)
+        success = get_db().save_user_goal(user_id, username, full_name, text)
         
         if success:
             # Send confirmation
@@ -124,7 +124,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
         
         # Save assessment
-        success = db.save_final_assessment(user_id, score)
+        success = get_db().save_final_assessment(user_id, score)
         
         if success:
             # Send thanks message
@@ -157,7 +157,7 @@ async def handle_progress_callback(update: Update, context: ContextTypes.DEFAULT
     logger.info(f"User {user_id} selected progress: {choice}")
     
     # Update database
-    success = db.update_progress_day2(user_id, choice)
+    success = get_db().update_progress_day2(user_id, choice)
     
     if not success:
         await query.edit_message_text(ERROR_GENERAL)

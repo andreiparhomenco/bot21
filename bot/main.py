@@ -15,7 +15,7 @@ from bot.handlers import (
     error_handler,
 )
 from scheduler import tasks as scheduler_module
-from database.sheets import db
+from database.sheets import get_db
 
 
 def main() -> None:
@@ -38,6 +38,9 @@ def main() -> None:
     try:
         # Create application
         application = Application.builder().token(settings.BOT_TOKEN).build()
+        
+        # Initialize database
+        db = get_db()
         
         # Initialize scheduler
         scheduler_module.initialize_scheduler()

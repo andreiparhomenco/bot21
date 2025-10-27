@@ -299,6 +299,18 @@ class SheetsDatabase:
             return []
 
 
-# Create singleton instance
-db = SheetsDatabase()
+# Lazy initialization of database
+_db_instance = None
+
+
+def get_db() -> SheetsDatabase:
+    """Get or create database instance (lazy initialization)"""
+    global _db_instance
+    if _db_instance is None:
+        _db_instance = SheetsDatabase()
+    return _db_instance
+
+
+# For backward compatibility
+db = None  # Will be initialized on first use
 
