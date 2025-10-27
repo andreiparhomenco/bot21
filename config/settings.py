@@ -26,13 +26,19 @@ class Settings:
     def _setup_credentials_path():
         """Setup Google credentials, supporting Railway environment variable"""
         if os.getenv("GOOGLE_CREDENTIALS"):
-            # Create credentials from environment variable
-            credentials_data = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
-            credentials_path = "/tmp/google_credentials.json"
-            Path(credentials_path).parent.mkdir(exist_ok=True)
-            with open(credentials_path, 'w') as f:
-                json.dump(credentials_data, f)
-            return credentials_path
+            try:
+                # Create credentials from environment variable
+                credentials_data = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+                credentials_path = "/tmp/google_credentials.json"
+                Path(credentials_path).parent.mkdir(exist_ok=True)
+                with open(credentials_path, 'w') as f:
+                    json.dump(credentials_data, f)
+                print(f"✓ Created credentials file from GOOGLE_CREDENTIALS env var: {credentials_path}")
+                return credentials_path
+            except json.JSONDecodeError as e:
+                print(f"✗ Error parsing GOOGLE_CREDENTIALS: {e}")
+                # Fall back to default path
+                return os.getenv("CREDENTIALS_PATH", "credentials/google_credentials.json")
         else:
             # Use file path from environment or default
             return os.getenv("CREDENTIALS_PATH", "credentials/google_credentials.json")
@@ -68,8 +74,9 @@ class Settings:
         if not cls.SPREADSHEET_ID:
             errors.append("SPREADSHEET_ID is not set")
         
-        if not Path(cls.CREDENTIALS_PATH).exists():
-            errors.append(f"Google credentials file not found: {cls.CREDENTIALS_PATH}")
+        # Check credentials: either file exists OR GOOGLE_CREDENTIALS env var is set
+        if not os.getenv("GOOGLE_CREDENTIALS") and not Path(cls.CREDENTIALS_PATH).exists():
+            errors.append(f"Google credentials not found: set GOOGLE_CREDENTIALS env var or provide {cls.CREDENTIALS_PATH}")
         
         if errors:
             print("Configuration errors:")
