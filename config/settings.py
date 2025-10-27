@@ -3,6 +3,7 @@ Application settings and configuration
 Loads from environment variables
 """
 import os
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -18,7 +19,25 @@ class Settings:
     
     # Google Sheets
     SPREADSHEET_ID: str = os.getenv("SPREADSHEET_ID", "")
-    CREDENTIALS_PATH: str = os.getenv("CREDENTIALS_PATH", "credentials/google_credentials.json")
+    
+    # Google Credentials - support for Railway deployment
+    # Try to load from environment variable first (for Railway/Docker)
+    @staticmethod
+    def _setup_credentials_path():
+        """Setup Google credentials, supporting Railway environment variable"""
+        if os.getenv("GOOGLE_CREDENTIALS"):
+            # Create credentials from environment variable
+            credentials_data = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+            credentials_path = "/tmp/google_credentials.json"
+            Path(credentials_path).parent.mkdir(exist_ok=True)
+            with open(credentials_path, 'w') as f:
+                json.dump(credentials_data, f)
+            return credentials_path
+        else:
+            # Use file path from environment or default
+            return os.getenv("CREDENTIALS_PATH", "credentials/google_credentials.json")
+    
+    CREDENTIALS_PATH: str = _setup_credentials_path.__func__()
     
     # Scheduler
     SCHEDULER_TIMEZONE: str = os.getenv("SCHEDULER_TIMEZONE", "Europe/Moscow")

@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Environment files (secrets should be in Railway env vars)
+.env
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs (will be created in container)
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+
+# Testing
+tests/
+*.test.py
+check_sheets.py
+
+# Windows scripts
+*.bat
+*.ps1
+
+# Credentials (should be mounted or in env vars)
+credentials/*.json
+
