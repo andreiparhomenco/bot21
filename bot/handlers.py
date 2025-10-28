@@ -22,6 +22,7 @@ from utils.logger import logger
 
 
 # User state tracking (in-memory, keyed by user_id)
+# Stores: user_id -> {'state': UserState, 'row_number': int, 'goal_text': str}
 user_states = {}
 
 
@@ -37,7 +38,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {user_id} ({username}) initiated /start")
     
     # Set user state to awaiting goal
-    user_states[user_id] = UserState.AWAITING_GOAL
+    user_states[user_id] = {'state': UserState.AWAITING_GOAL}
     
     await update.message.reply_text(WELCOME_MESSAGE, parse_mode='Markdown')
 
@@ -52,15 +53,15 @@ async def assess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"User {user_id} requested assessment")
     
-    # Check if user has a goal
-    user_data = get_db().get_user_data(user_id)
+    # Check if user has a goal in current session
+    user_data = user_states.get(user_id)
     
-    if not user_data or not user_data.get('goal_text'):
+    if not user_data or 'goal_text' not in user_data:
         await update.message.reply_text(ERROR_NO_GOAL)
         return
     
     # Set state to awaiting assessment
-    user_states[user_id] = UserState.AWAITING_ASSESSMENT
+    user_states[user_id]['state'] = UserState.AWAITING_ASSESSMENT
     
     goal_text = user_data['goal_text']
     message = ASSESSMENT_REQUEST.format(goal=goal_text)
@@ -74,11 +75,10 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     """
     user = update.effective_user
     user_id = user.id
-    username = user.username or user.first_name
-    full_name = f"{user.first_name} {user.last_name or ''}".strip()
     text = update.message.text.strip()
     
-    current_state = user_states.get(user_id, UserState.IDLE)
+    user_data = user_states.get(user_id, {})
+    current_state = user_data.get('state', UserState.IDLE)
     
     # State: Awaiting Goal
     if current_state == UserState.AWAITING_GOAL:
@@ -92,18 +92,22 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await update.message.reply_text(ERROR_GOAL_TOO_LONG)
             return
         
-        # Save goal to database
-        success = get_db().save_user_goal(user_id, username, full_name, text)
+        # Save goal to database (anonymous)
+        row_number = get_db().save_user_goal(text)
         
-        if success:
+        if row_number:
             # Send confirmation
             confirmation = GOAL_CONFIRMATION.format(goal=text)
             await update.message.reply_text(confirmation, parse_mode='Markdown')
             
-            # Update state
-            user_states[user_id] = UserState.GOAL_SET
+            # Update state and store goal info in memory
+            user_states[user_id] = {
+                'state': UserState.GOAL_SET,
+                'row_number': row_number,
+                'goal_text': text
+            }
             
-            logger.info(f"✅ Saved goal for user {user_id}")
+            logger.info(f"✅ Saved anonymous goal to row {row_number}")
         else:
             await update.message.reply_text(ERROR_GENERAL)
     
@@ -116,8 +120,15 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(ERROR_INVALID_ASSESSMENT)
             return
         
+        # Get row number from user state
+        row_number = user_data.get('row_number')
+        
+        if not row_number:
+            await update.message.reply_text(ERROR_NO_GOAL)
+            return
+        
         # Save assessment
-        success = get_db().save_final_assessment(user_id, score)
+        success = get_db().save_final_assessment(row_number, score)
         
         if success:
             # Send thanks message
@@ -125,9 +136,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(thanks, parse_mode='Markdown')
             
             # Update state
-            user_states[user_id] = UserState.COMPLETED
+            user_states[user_id]['state'] = UserState.COMPLETED
             
-            logger.info(f"✅ Saved assessment for user {user_id}: {score}%")
+            logger.info(f"✅ Saved assessment for row {row_number}: {score}%")
         else:
             await update.message.reply_text(ERROR_GENERAL)
     

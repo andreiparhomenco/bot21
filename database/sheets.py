@@ -55,9 +55,7 @@ class SheetsDatabase:
     def _initialize_user_data_headers(self):
         """Initialize UserData sheet with column headers"""
         headers = [
-            "user_id", "username", "full_name", "goal_text", "goal_date",
-            "progress_day2", "progress_date", "final_percent", "final_date",
-            "current_state"
+            "goal_text", "goal_date", "final_percent", "final_date"
         ]
         self.user_data_sheet.append_row(headers)
         logger.info("✅ Initialized UserData sheet headers")
@@ -82,221 +80,84 @@ class SheetsDatabase:
                 else:
                     raise
     
-    def save_user_goal(
-        self,
-        user_id: int,
-        username: str,
-        full_name: str,
-        goal_text: str
-    ) -> bool:
+    def save_user_goal(self, goal_text: str) -> Optional[int]:
         """
-        Save user's goal (Day 1)
+        Save anonymous user goal
         
         Args:
-            user_id: Telegram user ID
-            username: Telegram username
-            full_name: User's full name
             goal_text: User's goal text
             
         Returns:
-            True if successful, False otherwise
+            Row number of the saved goal, or None if failed
         """
         try:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Check if user already exists
-            existing_user = self.get_user_data(user_id)
+            # Always insert new anonymous record
+            row_data = [goal_text, now, "", ""]
+            self._retry_on_rate_limit(self.user_data_sheet.append_row, row_data)
             
-            if existing_user:
-                # Update existing user's goal
-                row_num = existing_user['row_number']
-                self._retry_on_rate_limit(
-                    self.user_data_sheet.update,
-                    f'D{row_num}:E{row_num}',
-                    [[goal_text, now]]
-                )
-                self._retry_on_rate_limit(
-                    self.user_data_sheet.update,
-                    f'J{row_num}',
-                    [[UserState.GOAL_SET.value]]
-                )
-                logger.info(f"✅ Updated goal for user {user_id}")
-            else:
-                # Insert new user
-                row_data = [
-                    user_id, username, full_name, goal_text, now,
-                    "", "", "", "", UserState.GOAL_SET.value
-                ]
-                self._retry_on_rate_limit(self.user_data_sheet.append_row, row_data)
-                logger.info(f"✅ Saved new goal for user {user_id}")
+            # Get the row number of the newly added record
+            all_data = self._retry_on_rate_limit(self.user_data_sheet.get_all_values)
+            row_number = len(all_data)  # Last row
             
-            return True
+            logger.info(f"✅ Saved anonymous goal to row {row_number}")
+            return row_number
             
         except Exception as e:
             logger.error(f"❌ Error saving user goal: {e}")
-            return False
+            return None
     
-    def get_user_data(self, user_id: int) -> Optional[Dict[str, Any]]:
+    def get_goal_by_row(self, row_number: int) -> Optional[str]:
         """
-        Get user data by user_id
+        Get goal text by row number
         
         Args:
-            user_id: Telegram user ID
+            row_number: Row number in the sheet
             
         Returns:
-            Dict with user data or None if not found
+            Goal text or None if not found
         """
         try:
-            all_data = self._retry_on_rate_limit(self.user_data_sheet.get_all_values)
-            
-            for idx, row in enumerate(all_data[1:], start=2):  # Skip header row
-                if row and str(row[0]) == str(user_id):
-                    return {
-                        'row_number': idx,
-                        'user_id': row[0],
-                        'username': row[1] if len(row) > 1 else "",
-                        'full_name': row[2] if len(row) > 2 else "",
-                        'goal_text': row[3] if len(row) > 3 else "",
-                        'goal_date': row[4] if len(row) > 4 else "",
-                        'progress_day2': row[5] if len(row) > 5 else "",
-                        'progress_date': row[6] if len(row) > 6 else "",
-                        'final_percent': row[7] if len(row) > 7 else "",
-                        'final_date': row[8] if len(row) > 8 else "",
-                        'current_state': row[9] if len(row) > 9 else UserState.IDLE.value
-                    }
-            
-            return None
+            cell_value = self._retry_on_rate_limit(
+                self.user_data_sheet.cell,
+                row_number,
+                1  # Column A - goal_text
+            )
+            return cell_value.value if cell_value else None
             
         except Exception as e:
-            logger.error(f"❌ Error getting user data: {e}")
+            logger.error(f"❌ Error getting goal by row: {e}")
             return None
     
-    def update_progress_day2(
-        self,
-        user_id: int,
-        progress_option: str
-    ) -> bool:
+    
+    def save_final_assessment(self, row_number: int, percent: int) -> bool:
         """
-        Update user's Day 2 progress response
+        Save final self-assessment for anonymous record
         
         Args:
-            user_id: Telegram user ID
-            progress_option: User's chosen progress option
+            row_number: Row number in the sheet
+            percent: Self-assessment percentage (0-100)
             
         Returns:
             True if successful, False otherwise
         """
         try:
-            user_data = self.get_user_data(user_id)
-            
-            if not user_data:
-                logger.error(f"User {user_id} not found")
-                return False
-            
-            row_num = user_data['row_number']
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Map progress option to Russian text
-            progress_text = {
-                "on_track": "Всё по плану",
-                "difficulties": "Есть трудности",
-                "not_started": "Ещё не начинал(а)"
-            }.get(progress_option, progress_option)
-            
+            # Update columns C and D (final_percent, final_date)
             self._retry_on_rate_limit(
                 self.user_data_sheet.update,
-                f'F{row_num}:G{row_num}',
-                [[progress_text, now]]
-            )
-            
-            self._retry_on_rate_limit(
-                self.user_data_sheet.update,
-                f'J{row_num}',
-                [[UserState.PROGRESS_RECORDED.value]]
-            )
-            
-            logger.info(f"✅ Updated Day 2 progress for user {user_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Error updating Day 2 progress: {e}")
-            return False
-    
-    def save_final_assessment(
-        self,
-        user_id: int,
-        percent: int
-    ) -> bool:
-        """
-        Save user's final self-assessment (Day 3)
-        
-        Args:
-            user_id: Telegram user ID
-            percent: Assessment percentage (0-100)
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            user_data = self.get_user_data(user_id)
-            
-            if not user_data:
-                logger.error(f"User {user_id} not found")
-                return False
-            
-            row_num = user_data['row_number']
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            self._retry_on_rate_limit(
-                self.user_data_sheet.update,
-                f'H{row_num}:I{row_num}',
+                f'C{row_number}:D{row_number}',
                 [[percent, now]]
             )
             
-            self._retry_on_rate_limit(
-                self.user_data_sheet.update,
-                f'J{row_num}',
-                [[UserState.COMPLETED.value]]
-            )
-            
-            logger.info(f"✅ Saved final assessment for user {user_id}: {percent}%")
+            logger.info(f"✅ Saved final assessment for row {row_number}: {percent}%")
             return True
             
         except Exception as e:
             logger.error(f"❌ Error saving final assessment: {e}")
             return False
-    
-    def get_users_by_state(self, state: UserState) -> List[Dict[str, Any]]:
-        """
-        Get all users in a specific state
-        
-        Args:
-            state: UserState to filter by
-            
-        Returns:
-            List of user data dictionaries
-        """
-        try:
-            all_data = self._retry_on_rate_limit(self.user_data_sheet.get_all_values)
-            users = []
-            
-            for idx, row in enumerate(all_data[1:], start=2):  # Skip header
-                if row and len(row) > 9 and row[9] == state.value:
-                    users.append({
-                        'row_number': idx,
-                        'user_id': int(row[0]),
-                        'username': row[1],
-                        'full_name': row[2],
-                        'goal_text': row[3],
-                        'goal_date': row[4],
-                        'current_state': row[9]
-                    })
-            
-            return users
-            
-        except Exception as e:
-            logger.error(f"❌ Error getting users by state: {e}")
-            return []
 
 
 # Lazy initialization of database
