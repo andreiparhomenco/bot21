@@ -3,7 +3,7 @@ Main entry point for GoalBuddy21 Telegram bot
 Initializes and runs the application
 """
 import sys
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from config.settings import settings
 from utils.logger import logger
@@ -11,10 +11,8 @@ from bot.handlers import (
     start_command,
     assess_command,
     handle_text_message,
-    handle_progress_callback,
     error_handler,
 )
-from scheduler import tasks as scheduler_module
 from database.sheets import get_db
 
 
@@ -42,17 +40,10 @@ def main() -> None:
         # Initialize database
         db = get_db()
         
-        # Initialize scheduler
-        scheduler_module.initialize_scheduler()
-        
-        # Restore pending reminders
-        scheduler_module.restore_pending_reminders(application.bot, db)
-        
         # Register handlers
         application.add_handler(CommandHandler("start", start_command))
         application.add_handler(CommandHandler("assess", assess_command))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-        application.add_handler(CallbackQueryHandler(handle_progress_callback))
         
         # Register error handler
         application.add_error_handler(error_handler)
@@ -79,9 +70,6 @@ def main() -> None:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)
     finally:
-        # Cleanup
-        if scheduler_module.scheduler:
-            scheduler_module.scheduler.shutdown()
         logger.info("Bot stopped")
 
 

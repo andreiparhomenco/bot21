@@ -47,3 +47,4 @@ def validate_goal_text(text: str, min_length: int = 10, max_length: int = 500) -
     
     return True, ""
 
+

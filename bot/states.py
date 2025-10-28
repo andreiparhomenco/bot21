@@ -21,3 +21,4 @@ class ProgressOption(Enum):
     DIFFICULTIES = "difficulties"
     NOT_STARTED = "not_started"
 
+

@@ -5,14 +5,10 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from database.sheets import get_db
-from scheduler.tasks import schedule_day2_reminder
-from bot.states import UserState, ProgressOption
+from bot.states import UserState
 from bot.messages import (
     WELCOME_MESSAGE,
     GOAL_CONFIRMATION,
-    RESPONSE_ON_TRACK,
-    RESPONSE_DIFFICULTIES,
-    RESPONSE_NOT_STARTED,
     ASSESSMENT_REQUEST,
     ASSESSMENT_THANKS,
     ERROR_INVALID_ASSESSMENT,
@@ -107,9 +103,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             # Update state
             user_states[user_id] = UserState.GOAL_SET
             
-            # Schedule Day 2 reminder
-            schedule_day2_reminder(context.bot, user_id, username, text)
-            
             logger.info(f"✅ Saved goal for user {user_id}")
         else:
             await update.message.reply_text(ERROR_GENERAL)
@@ -142,41 +135,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         # User sent message without being in a specific state
         # Ignore or provide help
         pass
-
-
-async def handle_progress_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Handle callback queries from Day 2 progress buttons
-    """
-    query = update.callback_query
-    user_id = query.from_user.id
-    choice = query.data
-    
-    await query.answer()
-    
-    logger.info(f"User {user_id} selected progress: {choice}")
-    
-    # Update database
-    success = get_db().update_progress_day2(user_id, choice)
-    
-    if not success:
-        await query.edit_message_text(ERROR_GENERAL)
-        return
-    
-    # Send appropriate response
-    response_map = {
-        ProgressOption.ON_TRACK.value: RESPONSE_ON_TRACK,
-        ProgressOption.DIFFICULTIES.value: RESPONSE_DIFFICULTIES,
-        ProgressOption.NOT_STARTED.value: RESPONSE_NOT_STARTED,
-    }
-    
-    response = response_map.get(choice, ERROR_GENERAL)
-    await query.edit_message_text(response, parse_mode='Markdown')
-    
-    # Update user state
-    user_states[user_id] = UserState.PROGRESS_RECORDED
-    
-    logger.info(f"✅ Recorded Day 2 progress for user {user_id}")
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

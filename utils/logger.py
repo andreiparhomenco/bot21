@@ -57,3 +57,4 @@ def setup_logger(name: str = "goalbuddy21") -> logging.Logger:
 # Create default logger instance
 logger = setup_logger()
 
+

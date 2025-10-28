@@ -47,3 +47,4 @@ check_sheets.py
 # Credentials (should be mounted or in env vars)
 credentials/*.json
 
+
