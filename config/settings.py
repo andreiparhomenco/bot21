@@ -29,8 +29,12 @@ class Settings:
         
         if creds_env:
             try:
-                # Clean up the JSON string - remove extra whitespace, newlines
+                # Clean up the JSON string
+                # Remove leading/trailing whitespace and newlines
                 creds_env = creds_env.strip()
+                
+                # Railway might format JSON with extra whitespace - that's okay
+                # json.loads handles multiline JSON just fine
                 
                 # Try to parse JSON
                 credentials_data = json.loads(creds_env)
@@ -39,27 +43,40 @@ class Settings:
                 if not isinstance(credentials_data, dict):
                     raise ValueError("GOOGLE_CREDENTIALS must be a JSON object")
                 
-                if "type" not in credentials_data or "client_email" not in credentials_data:
-                    raise ValueError("GOOGLE_CREDENTIALS missing required fields (type, client_email)")
+                required_fields = ["type", "client_email", "private_key"]
+                missing_fields = [f for f in required_fields if f not in credentials_data]
+                
+                if missing_fields:
+                    raise ValueError(f"GOOGLE_CREDENTIALS missing required fields: {', '.join(missing_fields)}")
+                
+                if credentials_data.get("type") != "service_account":
+                    raise ValueError("GOOGLE_CREDENTIALS must be a service_account type")
                 
                 # Create credentials file
                 credentials_path = "/tmp/google_credentials.json"
                 Path(credentials_path).parent.mkdir(exist_ok=True)
                 with open(credentials_path, 'w') as f:
-                    json.dump(credentials_data, f)
+                    json.dump(credentials_data, f, indent=2)
                 
                 print(f"✓ Created credentials file from GOOGLE_CREDENTIALS env var")
                 print(f"  Path: {credentials_path}")
                 print(f"  Type: {credentials_data.get('type')}")
                 print(f"  Client: {credentials_data.get('client_email')}")
+                print(f"  Project: {credentials_data.get('project_id', 'N/A')}")
                 
                 return credentials_path
                 
             except json.JSONDecodeError as e:
                 print(f"✗ Error parsing GOOGLE_CREDENTIALS JSON: {e}")
-                print(f"  First 100 chars: {creds_env[:100]}...")
-                print(f"  Hint: Make sure the variable contains valid JSON without extra characters")
+                print(f"  Error position: line {e.lineno}, column {e.colno}")
+                print(f"  First 200 chars: {creds_env[:200]}...")
+                print(f"  Last 100 chars: ...{creds_env[-100:]}")
+                print(f"  Hint: Check for syntax errors (trailing commas, missing quotes, etc.)")
                 # Fall back to default path
+                return os.getenv("CREDENTIALS_PATH", "credentials/google_credentials.json")
+                
+            except ValueError as e:
+                print(f"✗ Validation error: {e}")
                 return os.getenv("CREDENTIALS_PATH", "credentials/google_credentials.json")
                 
             except Exception as e:
