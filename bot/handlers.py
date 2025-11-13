@@ -17,7 +17,7 @@ from bot.messages import (
     ERROR_GOAL_TOO_LONG,
     ERROR_GENERAL,
 )
-from utils.validators import validate_assessment_score, validate_goal_text
+from utils.validators import validate_assessment_score, validate_goal_text, safe_log_snippet
 from utils.logger import logger
 
 
@@ -30,12 +30,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle /start command
     Initiates goal setting flow
+    
+    Security:
+        - Does not log user_id or username (anonymity requirement)
     """
     user = update.effective_user
     user_id = user.id
-    username = user.username or user.first_name
     
-    logger.info(f"User {user_id} ({username}) initiated /start")
+    logger.info("User initiated /start command")
     
     # Set user state to awaiting goal
     user_states[user_id] = {'state': UserState.AWAITING_GOAL}
@@ -47,11 +49,14 @@ async def assess_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle /assess command
     Allows user to self-assess their progress
+    
+    Security:
+        - Does not log user_id or username (anonymity requirement)
     """
     user = update.effective_user
     user_id = user.id
     
-    logger.info(f"User {user_id} requested assessment")
+    logger.info("User requested assessment")
     
     # Check if user has a goal in current session
     user_data = user_states.get(user_id)
@@ -107,7 +112,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
                 'goal_text': text
             }
             
-            logger.info(f"✅ Saved anonymous goal to row {row_number}")
+            # Log without user_id, with sanitized goal snippet
+            logger.info(f"✅ Saved anonymous goal to row {row_number}: {safe_log_snippet(text)}")
         else:
             await update.message.reply_text(ERROR_GENERAL)
     
@@ -138,6 +144,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             # Update state
             user_states[user_id]['state'] = UserState.COMPLETED
             
+            # Log without user_id
             logger.info(f"✅ Saved assessment for row {row_number}: {score}%")
         else:
             await update.message.reply_text(ERROR_GENERAL)

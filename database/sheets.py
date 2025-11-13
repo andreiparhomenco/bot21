@@ -11,6 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 from config.settings import settings
 from utils.logger import logger
+from utils.validators import escape_for_sheets
 from bot.states import UserState
 
 
@@ -82,19 +83,25 @@ class SheetsDatabase:
     
     def save_user_goal(self, goal_text: str) -> Optional[int]:
         """
-        Save anonymous user goal
+        Save anonymous user goal with security escaping
         
         Args:
             goal_text: User's goal text
             
         Returns:
             Row number of the saved goal, or None if failed
+            
+        Security:
+            - Applies escape_for_sheets to prevent CSV/Formula injection
         """
         try:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
+            # Escape goal_text to prevent CSV/Formula injection
+            safe_goal_text = escape_for_sheets(goal_text)
+            
             # Always insert new anonymous record
-            row_data = [goal_text, now, "", ""]
+            row_data = [safe_goal_text, now, "", ""]
             self._retry_on_rate_limit(self.user_data_sheet.append_row, row_data)
             
             # Get the row number of the newly added record
